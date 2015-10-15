@@ -6,6 +6,8 @@
 
 void change_int_char(char *b,int a);
 void FILE_name(char *a, char b[MAX], int c, char d[MAX]);
+void plot_color(int a, char *color);
+void change_16(int a,char *b);
 
 typedef struct {
   int data[MAX];
@@ -31,13 +33,16 @@ int main(void){
   int x,y,k;
   int number_one,number_two;
   int cluster,MAX_number,folder_number;
+  float size;
   char filename[MAX],filename2[MAX],filename3[MAX];
+  char color[256];
   FILE *fp;
   FILE *fp2;
   FILE *fp3;
   FILE *fp4;
   FILE *fp5;
   FILE *fp6;
+  FILE *gp;
   srand((unsigned)time(NULL));
 
   printf("数を入力してください\n");
@@ -50,6 +55,27 @@ int main(void){
 
   start=clock();//時間計測開始
   f_start=clock();
+
+  //サイズ決め
+  if(x<1000){
+    size=1.0;
+  }
+  else if(x<10000){
+    size=0.7;
+  }
+  else if(x<30000){
+    size=0.5;
+  }
+  else if(x<50000){
+    size=0.3;
+  }
+  else if(x<100000){
+    size=0.2;
+  }
+  else{
+    size=0.1;
+  }
+  //サイズ決め終了
 
   //データ作り
   fp=fopen("list/number.txt", "w");
@@ -178,10 +204,11 @@ int main(void){
 
   for(folder_number=1;folder_number<=MAX_number;folder_number++){//クラスタ毎
     start=clock();
-    FILE_name(filename,"list/folder/",folder_number,"/result_cluster.txt");
-    fp=fopen(filename, "a");
-    FILE_name(filename,"list/folder/",folder_number,"/result_number.txt");
-    fp2=fopen(filename, "w");
+
+    //ファイル作成
+    system("mkdir list/cluster");
+    //作成終了
+
     for(loop=1;;loop++){
       //k-means開始
       FILE_name(filename,"list/folder/",folder_number,"/number.txt");
@@ -212,10 +239,8 @@ int main(void){
 	    cluster=z;
 	  }
 	}
-	fprintf(fp2,"%d ",cluster);
 	fprintf(fp4,"%d ",cluster);
       }
-      fprintf(fp2,"\n\n");
       fclose(fp3);
       fclose(fp4);
       fclose(fp5);
@@ -245,6 +270,18 @@ int main(void){
 	fprintf(fp5,"%d ",i);
 	fclose(fp5);
 	fscanf(fp3,"%d\t%d",&data[1],&data[2]);
+	//
+	FILE_name(filename,"list/folder/",folder_number,"/");
+	FILE_name(filename,filename,cluster,".txt");
+	if(new[cluster].number==0){
+	  fp=fopen(filename,"w");
+	}
+	else{
+	  fp=fopen(filename,"a");
+	}
+	fprintf(fp,"%d\t%d\n",data[1],data[2]);
+	fclose(fp);
+	//
 	cluster_add[cluster][1]=data[1]-k_means[cluster][1]+cluster_add[cluster][1];//x軸の合計
 	cluster_add[cluster][2]=data[2]-k_means[cluster][2]+cluster_add[cluster][2];//y軸の合計
 	new[cluster].number++;//数を増やす
@@ -257,14 +294,11 @@ int main(void){
       for(z=1;z<=k;z++){//重心確定
 	if(new[z].number!=0){
 	  fprintf(fp3,"%d\t%d\n",cluster_add[z][1]/new[z].number+k_means[z][1],cluster_add[z][2]/new[z].number+k_means[z][2]);
-	  fprintf(fp,"%d\t%d\n",cluster_add[z][1]/new[z].number+k_means[z][1],cluster_add[z][2]/new[z].number+k_means[z][2]);
 	}
 	else{
 	  fprintf(fp3,"0\t0\n");
-	  fprintf(fp,"0\t0\n");
 	}
       }
-      fprintf(fp,"\n\n");
       fclose(fp3);
 
       FILE_name(filename,"list/folder/",folder_number,"/result.txt");
@@ -348,7 +382,32 @@ int main(void){
       if(same==1){
 	break;
       }
+    
+    //gnuplot
+    gp=popen("gnuplot","w");
+    for(i=1;i<=k;i++){
+      plot_color(i,color);
+      FILE_name(filename,"list/folder/",folder_number,"/");
+      FILE_name(filename,filename,i,".txt");
+      if(i==1){
+	fprintf(gp, "plot \'%s\' pt 13 ps %.1f lt rgb \"#%s\"\n",filename,size,color);
+      }
+      else{
+	fprintf(gp, "replot \'%s\' pt 13 ps %.1f lt rgb \"#%s\"\n",filename,size,color);
+      }
     }
+    FILE_name(filename,"list/folder/",folder_number,"/last_cluster_data.txt");
+    fprintf(gp,"replot \'%s\' pt 1 ps 1 lt rgb \"black\"\n",filename);
+    fprintf(gp, "set terminal postscript eps enhanced color\n");
+    FILE_name(filename,"list/cluster/",loop,".eps");
+    fprintf(gp, "set output \"%s\"\n",filename);
+    fprintf(gp, "replot\n");
+    pclose(gp);
+    //gnuplot終了
+    }
+
+    FILE_name(filename,"list/folder/",folder_number,"/cluster");
+    rename("list/cluster",filename);
 
     end=clock();
 
@@ -363,9 +422,6 @@ int main(void){
     fp4=fopen("list/time.txt","a");
     fprintf(fp4,"%dの計測時間は%.2f秒です\n",folder_number,(double)(end-start)/CLOCKS_PER_SEC);
     fclose(fp4);
-
-    fclose(fp);
-    fclose(fp2);
   }
 
   l_end=clock();
@@ -398,3 +454,68 @@ void FILE_name(char *a, char b[MAX], int c, char d[MAX]){
   strcat(a,file);
   strcat(a,d);
 }
+
+
+void plot_color(int a, char *color){
+  int i,c,d;
+  int r=0,g=0,b=0;
+  char red[2];
+  char green[2];
+  char blue[2];
+
+  a=a-1;
+
+  c=a%6+1;
+  d=a/6+1;
+
+  if(c==1||c==4||c==5){
+    r=255/d;
+  }
+  if(c==2||c==4||c==6){
+    g=255/d;
+  }
+  if(c==3||c==5||c==6){
+    b=255/d;
+  }
+
+  change_16(r,red);
+  change_16(g,green);
+  change_16(b,blue);
+
+  strcpy(color,red);
+  strcat(color,green);
+  strcat(color,blue);
+}
+
+void change_16(int a,char *b){
+  int l[2];
+  int i,c,d;
+
+  if(a>=16){
+    for(i=0;a>0;a=a/16,i++){
+      l[i]=a%16;
+    }
+  }
+  else if(a<16&&a!=0){
+    l[1]=0;
+    l[0]=a;
+    i=2;
+  }
+  else if(a==0){
+    l[0]=0;
+    l[1]=0;
+    i=2;
+  }
+
+  for(c=i-1,d=0;c>=0;c--,d++){
+    if(l[c]<=9){
+    b[d]=l[c]+48;
+    }
+    else{
+      b[d]=l[c]+87;
+    }
+  }
+  b[d]='\0';
+}
+
+
